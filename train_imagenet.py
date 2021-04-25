@@ -6,7 +6,7 @@ import torch
 import utils
 import glob
 import random
-import logger
+import logging
 import argparse
 import torch.nn as nn
 import genotypes
