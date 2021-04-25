@@ -108,7 +108,7 @@ def main():
         )
     data_dir = os.path.join(args.tmp_data_dir, 'imagenet')
     traindir = os.path.join(data_dir, 'train')
-    validdir = os.path.join(data_dir, 'val')
+    validdir = os.path.join(data_dir, 'valid')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     train_data = dset.ImageFolder(
         traindir,
