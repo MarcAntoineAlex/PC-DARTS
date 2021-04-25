@@ -6,7 +6,7 @@ import torch
 import utils
 import glob
 import random
-import logging
+import logger
 import argparse
 import torch.nn as nn
 import genotypes
@@ -65,11 +65,11 @@ jobid = os.environ["SLURM_JOBID"]
 args.save = '{}/{}'.format(args.save, jobid)
 utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+logger.basicConfig(stream=sys.stdout, level=logger.INFO,
     format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
-fh.setFormatter(logging.Formatter(log_format))
-logging.getLogger().addHandler(fh)
+fh = logger.FileHandler(os.path.join(args.save, 'log.txt'))
+fh.setFormatter(logger.Formatter(log_format))
+logger.getLogger().addHandler(fh)
 
 CLASSES = 1000
 
@@ -136,7 +136,6 @@ def worker(gpu, ngpus_per_node, config_in):
         ck_name = "{}-{:d}-all".format(jobid, procid)
 
     writer = SummaryWriter(log_dir=os.path.join(args.save, writer_name))
-    writer.add_text('config', args.as_markdown(), 0)
     logger = utils.get_logger(os.path.join(args.save, logger_name))
 
     if args.dist_url == "env://" and args.rank == -1:
@@ -151,12 +150,12 @@ def worker(gpu, ngpus_per_node, config_in):
     torch.manual_seed(args.seed)
     cudnn.enabled = True
     torch.cuda.manual_seed(args.seed)
-    logging.info("args = %s", args)
-    logging.info("unparsed_args = %s", unparsed)
+    logger.info("args = %s", args)
+    logger.info("unparsed_args = %s", unparsed)
     num_gpus = torch.cuda.device_count()
     genotype = eval("genotypes.%s" % args.arch)
     print('---------Genotype---------')
-    logging.info(genotype)
+    logger.info(genotype)
     print('--------------------------')
     model = Network(args.init_channels, CLASSES, args.layers, args.auxiliary, genotype)
     if args.gpu is not None:
@@ -176,7 +175,7 @@ def worker(gpu, ngpus_per_node, config_in):
         # available GPUs if device_ids are not set
         model = torch.nn.parallel.DistributedDataParallel(model)
 
-    logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
+    logger.info("param size = %fMB", utils.count_parameters_in_MB(model))
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
     criterion_smooth = CrossEntropyLabelSmooth(CLASSES, args.label_smooth)
@@ -240,24 +239,24 @@ def worker(gpu, ngpus_per_node, config_in):
         else:
             print('Wrong lr type, exit')
             sys.exit(1)
-        logging.info('Epoch: %d lr %e', epoch, current_lr)
+        logger.info('Epoch: %d lr %e', epoch, current_lr)
         if epoch < 5 and args.batch_size > 256:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr * (epoch + 1) / 5.0
-            logging.info('Warming-up Epoch: %d, LR: %e', epoch, lr * (epoch + 1) / 5.0)
+            logger.info('Warming-up Epoch: %d, LR: %e', epoch, lr * (epoch + 1) / 5.0)
         if num_gpus > 1:
             model.module.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         else:
             model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         epoch_start = time.time()
         train_acc, train_obj = train(train_queue, model, criterion_smooth, optimizer, epoch, writer)
-        logging.info('Train_acc: %f', train_acc)
+        logger.info('Train_acc: %f', train_acc)
 
         valid_acc_top1, valid_acc_top5, valid_obj = infer(valid_queue, model, criterion)
-        logging.info('Valid_acc_top1: %f', valid_acc_top1)
-        logging.info('Valid_acc_top5: %f', valid_acc_top5)
+        logger.info('Valid_acc_top1: %f', valid_acc_top1)
+        logger.info('Valid_acc_top5: %f', valid_acc_top5)
         epoch_duration = time.time() - epoch_start
-        logging.info('Epoch time: %ds.', epoch_duration)
+        logger.info('Epoch time: %ds.', epoch_duration)
         is_best = False
         if valid_acc_top5 > best_acc_top5:
             best_acc_top5 = valid_acc_top5
@@ -325,7 +324,7 @@ def train(train_queue, model, criterion, optimizer, epoch, writer):
             else:
                 duration = end_time - start_time
                 start_time = time.time()
-            logging.info('TRAIN Step: %03d Objs: %e R1: %f R5: %f Duration: %ds BTime: %.3fs', 
+            logger.info('TRAIN Step: %03d Objs: %e R1: %f R5: %f Duration: %ds BTime: %.3fs',
                                     step, objs.avg, top1.avg, top5.avg, duration, batch_time.avg)
 
     return top1.avg, objs.avg
@@ -358,7 +357,7 @@ def infer(valid_queue, model, criterion):
             else:
                 duration = end_time - start_time
                 start_time = time.time()
-            logging.info('VALID Step: %03d Objs: %e R1: %f R5: %f Duration: %ds', step, objs.avg, top1.avg, top5.avg, duration)
+            logger.info('VALID Step: %03d Objs: %e R1: %f R5: %f Duration: %ds', step, objs.avg, top1.avg, top5.avg, duration)
 
     return top1.avg, top5.avg, objs.avg
 
