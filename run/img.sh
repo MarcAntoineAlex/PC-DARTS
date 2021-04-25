@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:V100:1
+#SBATCH --gres=gpu:V100:4
 #SBATCH -J aimg-2
 #SBATCH -o log/job-%j.log
 #SBATCH -e log/job-%j.err

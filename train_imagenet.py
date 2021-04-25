@@ -18,6 +18,24 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from model import NetworkImageNet as Network
 
+# basic
+import socket
+import warnings
+import copy
+
+# torch
+import torch.nn.parallel
+import torch.distributed as dist
+import torch.optim
+import torch.multiprocessing as mp
+import torch.utils.data as data
+from tensorboardX import SummaryWriter
+
+def find_free_port():
+    import socket
+    s = socket.socket()
+    s.bind(('', 0))            # Bind to a free port provided by the host.
+    return s.getsockname()[1]  # Return the port number assigned.
 
 parser = argparse.ArgumentParser("training imagenet")
 parser.add_argument('--workers', type=int, default=32, help='number of workers to load dataset')
@@ -40,10 +58,9 @@ parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoot
 parser.add_argument('--lr_scheduler', type=str, default='linear', help='lr scheduler, linear or cosine')
 parser.add_argument('--tmp_data_dir', type=str, default='augments', help='temp data dir')
 parser.add_argument('--note', type=str, default='try', help='note for this run')
-
+parser.add_argument('--wolrd_size', type=int, default=-1)
 
 args, unparsed = parser.parse_known_args()
-
 jobid = os.environ["SLURM_JOBID"]
 args.save = '{}/{}'.format(args.save, jobid)
 utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
@@ -71,30 +88,95 @@ class CrossEntropyLabelSmooth(nn.Module):
         loss = (-targets * log_probs).mean(0).sum()
         return loss
 
+
 def main():
-    if not torch.cuda.is_available():
-        logging.info('No GPU device available')
-        sys.exit(1)
+    # For slurm available
+    if args.world_size == -1 and "SLURM_NPROCS" in os.environ:
+        # acquire world size from slurm
+        args.world_size = int(os.environ["SLURM_NPROCS"])
+        args.rank = int(os.environ["SLURM_PROCID"])
+        jobid = os.environ["SLURM_JOBID"]
+        hostfile = os.path.join(args.save, "dist_url." + jobid  + ".txt")
+        if args.rank == 0:
+            ip = socket.gethostbyname(socket.gethostname())
+            port = find_free_port()
+            args.dist_url = "tcp://{}:{}".format(ip, port)
+            with open(hostfile, "w") as f:
+                f.write(args.dist_url)
+        else:
+            while not os.path.exists(hostfile):
+                time.sleep(5)  # waite for the main process
+            with open(hostfile, "r") as f:
+                args.dist_url = f.read()
+        print("dist-url:{} at PROCID {} / {}".format(args.dist_url, args.rank, args.world_size))
+
+    # support multiple GPU on one node
+    # assume each node have equal GPUs
+    ngpus_per_node = torch.cuda.device_count()
+    args.world_size = ngpus_per_node * args.world_size
+    mp.spawn(worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+
+
+def worker(gpu, ngpus_per_node, config_in):
+    # init
+    args = copy.deepcopy(config_in)
+    jobid = os.environ["SLURM_JOBID"]
+    procid = int(os.environ["SLURM_PROCID"])
+    args.gpu = gpu
+
+    if args.gpu is not None:
+        writer_name = "tb.{}-{:d}-{:d}".format(jobid, procid, gpu)
+        logger_name = ".{}-{:d}-{:d}.aug.log".format(jobid, procid, gpu)
+        ploter_name = "{}-{:d}-{:d}".format(jobid, procid, gpu)
+        ck_name = "{}-{:d}-{:d}".format(jobid, procid, gpu)
+    else:
+        writer_name = "tb.{}-{:d}-all".format(jobid, procid)
+        logger_name = "{}-{:d}-all.aug.log".format(jobid, procid)
+        ploter_name = "{}-{:d}-all".format(jobid, procid)
+        ck_name = "{}-{:d}-all".format(jobid, procid)
+
+    writer = SummaryWriter(log_dir=os.path.join(args.save, writer_name))
+    writer.add_text('config', args.as_markdown(), 0)
+    logger = utils.get_logger(os.path.join(args.save, logger_name))
+
+    if args.dist_url == "env://" and args.rank == -1:
+        args.rank = int(os.environ["RANK"])
+
+    args.rank = args.rank * ngpus_per_node + gpu
+    dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+                            world_size=args.world_size, rank=args.rank)
+
     np.random.seed(args.seed)
     cudnn.benchmark = True
     torch.manual_seed(args.seed)
-    cudnn.enabled=True
+    cudnn.enabled = True
     torch.cuda.manual_seed(args.seed)
     logging.info("args = %s", args)
     logging.info("unparsed_args = %s", unparsed)
-    num_gpus = torch.cuda.device_count()   
+    num_gpus = torch.cuda.device_count()
     genotype = eval("genotypes.%s" % args.arch)
     print('---------Genotype---------')
     logging.info(genotype)
-    print('--------------------------') 
+    print('--------------------------')
     model = Network(args.init_channels, CLASSES, args.layers, args.auxiliary, genotype)
-    if num_gpus > 1:
-        model = nn.DataParallel(model)
-        model = model.cuda()
+    if args.gpu is not None:
+        torch.cuda.set_device(args.gpu)
+        # model = model.to(device)
+        model.cuda(args.gpu)
+        # When using a single GPU per process and per DistributedDataParallel, we need to divide
+        # the batch size ourselves based on the total number of GPUs we have
+        args.batch_size = int(args.batch_size / ngpus_per_node)
+        args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
+        # model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.rank])
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        # model = torch.nn.parallel.DistributedDataParallel(model, device_ids=None, output_device=None)
     else:
-        model = model.cuda()
-    logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
+        model.cuda()
+        # DistributedDataParallel will divide and allocate batch_size to all
+        # available GPUs if device_ids are not set
+        model = torch.nn.parallel.DistributedDataParallel(model)
 
+    logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
     criterion_smooth = CrossEntropyLabelSmooth(CLASSES, args.label_smooth)
@@ -105,7 +187,7 @@ def main():
         args.learning_rate,
         momentum=args.momentum,
         weight_decay=args.weight_decay
-        )
+    )
     data_dir = os.path.join(args.tmp_data_dir, 'imagenet')
     traindir = os.path.join(data_dir, 'train')
     validdir = os.path.join(data_dir, 'valid')
@@ -132,13 +214,19 @@ def main():
             normalize,
         ]))
 
+    train_sampler = data.distributed.DistributedSampler(train_data,
+                                                        num_replicas=args.world_size,
+                                                        rank=args.rank)
+    valid_sampler = data.distributed.DistributedSampler(valid_data,
+                                                        num_replicas=args.world_size,
+                                                        rank=args.rank)
     train_queue = torch.utils.data.DataLoader(
-        train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=args.workers)
+        train_data, batch_size=args.batch_size, sampler=train_sampler, shuffle=True, pin_memory=True, num_workers=args.workers)
 
     valid_queue = torch.utils.data.DataLoader(
-        valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=args.workers)
+        valid_data, batch_size=args.batch_size, sampler=valid_sampler, shuffle=False, pin_memory=True, num_workers=args.workers)
 
-#    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.decay_period, gamma=args.gamma)
+    #    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.decay_period, gamma=args.gamma)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs))
     best_acc_top1 = 0
     best_acc_top5 = 0
@@ -162,7 +250,7 @@ def main():
         else:
             model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         epoch_start = time.time()
-        train_acc, train_obj = train(train_queue, model, criterion_smooth, optimizer)
+        train_acc, train_obj = train(train_queue, model, criterion_smooth, optimizer, epoch, writer)
         logging.info('Train_acc: %f', train_acc)
 
         valid_acc_top1, valid_acc_top5, valid_obj = infer(valid_queue, model, criterion)
@@ -180,8 +268,10 @@ def main():
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
             'best_acc_top1': best_acc_top1,
-            'optimizer' : optimizer.state_dict(),
-            }, is_best, args.save)        
+            'optimizer': optimizer.state_dict(),
+        }, is_best, args.save)
+    # get data with meta info
+
         
 def adjust_lr(optimizer, epoch):
     # Smaller slope for the last 5 epochs because lr * 1/250 is relatively large
@@ -193,12 +283,15 @@ def adjust_lr(optimizer, epoch):
         param_group['lr'] = lr
     return lr        
 
-def train(train_queue, model, criterion, optimizer):
+
+def train(train_queue, model, criterion, optimizer, epoch, writer):
+    global start_time
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
     batch_time = utils.AvgrageMeter()
     model.train()
+    cur_step = epoch * len(train_queue)
 
     for step, (input, target) in enumerate(train_queue):
         target = target.cuda(non_blocking=True)
@@ -220,6 +313,9 @@ def train(train_queue, model, criterion, optimizer):
         objs.update(loss.data.item(), n)
         top1.update(prec1.data.item(), n)
         top5.update(prec5.data.item(), n)
+        writer.add_scalar('train/loss', loss.item(), cur_step)
+        writer.add_scalar('train/top1', prec1.item(), cur_step)
+        writer.add_scalar('train/top5', prec5.item(), cur_step)
 
         if step % args.report_freq == 0:
             end_time = time.time()
