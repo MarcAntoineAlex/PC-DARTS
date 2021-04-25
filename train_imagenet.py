@@ -91,7 +91,7 @@ class CrossEntropyLabelSmooth(nn.Module):
 
 def main():
     # For slurm available
-    if args.world_size == -1 and "SLURM_NPROCS" in os.environ:
+    if "SLURM_NPROCS" in os.environ:
         # acquire world size from slurm
         args.world_size = int(os.environ["SLURM_NPROCS"])
         args.rank = int(os.environ["SLURM_PROCID"])
