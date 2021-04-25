@@ -38,13 +38,14 @@ parser.add_argument('--arch', type=str, default='PCDARTS', help='which architect
 parser.add_argument('--grad_clip', type=float, default=5., help='gradient clipping')
 parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoothing')
 parser.add_argument('--lr_scheduler', type=str, default='linear', help='lr scheduler, linear or cosine')
-parser.add_argument('--tmp_data_dir', type=str, default='/tmp/cache/', help='temp data dir')
+parser.add_argument('--tmp_data_dir', type=str, default='augments', help='temp data dir')
 parser.add_argument('--note', type=str, default='try', help='note for this run')
 
 
 args, unparsed = parser.parse_known_args()
 
-args.save = '{}eval-{}-{}'.format(args.save, args.note, time.strftime("%Y%m%d-%H%M%S"))
+jobid = os.environ["SLURM_JOBID"]
+args.save = '{}{}/eval-{}-{}'.format(args.save, jobid, args.note, time.strftime("%Y%m%d-%H%M%S"))
 utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 
 log_format = '%(asctime)s %(message)s'
