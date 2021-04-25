@@ -32,7 +32,7 @@ parser.add_argument('--layers', type=int, default=14, help='total number of laye
 parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
 parser.add_argument('--auxiliary_weight', type=float, default=0.4, help='weight for auxiliary loss')
 parser.add_argument('--drop_path_prob', type=float, default=0, help='drop path probability')
-parser.add_argument('--save', type=str, default='/tmp/checkpoints/', help='experiment name')
+parser.add_argument('--save', type=str, default='augments', help='experiment name')
 parser.add_argument('--seed', type=int, default=0, help='random seed')
 parser.add_argument('--arch', type=str, default='PCDARTS', help='which architecture to use')
 parser.add_argument('--grad_clip', type=float, default=5., help='gradient clipping')
@@ -45,7 +45,7 @@ parser.add_argument('--note', type=str, default='try', help='note for this run')
 args, unparsed = parser.parse_known_args()
 
 jobid = os.environ["SLURM_JOBID"]
-args.save = '{}{}/eval-{}-{}'.format(args.save, jobid, args.note, time.strftime("%Y%m%d-%H%M%S"))
+args.save = '{}/{}'.format(args.save, jobid)
 utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 
 log_format = '%(asctime)s %(message)s'
