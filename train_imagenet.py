@@ -63,8 +63,7 @@ parser.add_argument('--wolrd_size', type=int, default=-1)
 args, unparsed = parser.parse_known_args()
 jobid = os.environ["SLURM_JOBID"]
 args.save = '{}/{}'.format(args.save, jobid)
-if not os.path.exists(args.save):
-    utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
+utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
     format=log_format, datefmt='%m/%d %I:%M:%S %p')
