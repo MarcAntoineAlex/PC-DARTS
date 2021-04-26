@@ -137,7 +137,7 @@ def worker(gpu, ngpus_per_node, config_in):
         args.rank = int(os.environ["RANK"])
 
     args.rank = args.rank * ngpus_per_node + gpu
-    dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+    dist.init_process_group(backend="nccl", init_method=args.dist_url,
                             world_size=args.world_size, rank=args.rank)
 
     np.random.seed(args.seed)
