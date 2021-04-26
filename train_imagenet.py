@@ -65,11 +65,6 @@ jobid = os.environ["SLURM_JOBID"]
 args.save = '{}/{}'.format(args.save, jobid)
 utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 log_format = '%(asctime)s %(message)s'
-logger.basicConfig(stream=sys.stdout, level=logger.INFO,
-    format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logger.FileHandler(os.path.join(args.save, 'log.txt'))
-fh.setFormatter(logger.Formatter(log_format))
-logger.getLogger().addHandler(fh)
 
 CLASSES = 1000
 
@@ -249,10 +244,10 @@ def worker(gpu, ngpus_per_node, config_in):
         else:
             model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         epoch_start = time.time()
-        train_acc, train_obj = train(train_queue, model, criterion_smooth, optimizer, epoch, writer)
+        train_acc, train_obj = train(train_queue, model, criterion_smooth, optimizer, epoch, writer, logger)
         logger.info('Train_acc: %f', train_acc)
 
-        valid_acc_top1, valid_acc_top5, valid_obj = infer(valid_queue, model, criterion)
+        valid_acc_top1, valid_acc_top5, valid_obj = infer(valid_queue, model, criterion, logger)
         logger.info('Valid_acc_top1: %f', valid_acc_top1)
         logger.info('Valid_acc_top5: %f', valid_acc_top5)
         epoch_duration = time.time() - epoch_start
@@ -283,7 +278,7 @@ def adjust_lr(optimizer, epoch):
     return lr        
 
 
-def train(train_queue, model, criterion, optimizer, epoch, writer):
+def train(train_queue, model, criterion, optimizer, epoch, writer, logger):
     global start_time
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
@@ -330,7 +325,7 @@ def train(train_queue, model, criterion, optimizer, epoch, writer):
     return top1.avg, objs.avg
 
 
-def infer(valid_queue, model, criterion):
+def infer(valid_queue, model, criterion, logger):
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
