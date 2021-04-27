@@ -215,10 +215,10 @@ def worker(gpu, ngpus_per_node, config_in):
                                                         num_replicas=args.world_size,
                                                         rank=args.rank)
     train_queue = torch.utils.data.DataLoader(
-        train_data, batch_size=args.batch_size, sampler=train_sampler, shuffle=True, pin_memory=True, num_workers=args.workers)
+        train_data, batch_size=args.batch_size, sampler=train_sampler, pin_memory=True, num_workers=args.workers)
 
     valid_queue = torch.utils.data.DataLoader(
-        valid_data, batch_size=args.batch_size, sampler=valid_sampler, shuffle=False, pin_memory=True, num_workers=args.workers)
+        valid_data, batch_size=args.batch_size, sampler=valid_sampler, pin_memory=True, num_workers=args.workers)
 
     #    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.decay_period, gamma=args.gamma)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs))
@@ -226,6 +226,8 @@ def worker(gpu, ngpus_per_node, config_in):
     best_acc_top5 = 0
     lr = args.learning_rate
     for epoch in range(args.epochs):
+        valid_sampler.set_epoch(epoch)
+        train_sampler.set_epoch(epoch)
         if args.lr_scheduler == 'cosine':
             scheduler.step()
             current_lr = scheduler.get_lr()[0]
