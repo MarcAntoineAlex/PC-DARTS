@@ -199,12 +199,12 @@ class NetworkImageNet(nn.Module):
     self.global_pooling = nn.AvgPool2d(7)
     self.classifier = nn.Linear(C_prev, num_classes)
 
-  def forward(self, input):
+  def forward(self, x):
     logits_aux = None
-    s0 = self.stem0(input)
+    s0 = self.stem0(x)
     s1 = self.stem1(s0)
     for i, cell in enumerate(self.cells):
-      s0, s1 = s1, cell(s0, s1, self.drop_path_prob)
+      s0, s1 = s1, cell(s0, s1, 0)
       if i == 2 * self._layers // 3:
         if self._auxiliary and self.training:
           logits_aux = self.auxiliary_head(s1)
