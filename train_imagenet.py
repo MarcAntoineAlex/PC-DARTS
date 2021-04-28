@@ -59,6 +59,8 @@ parser.add_argument('--lr_scheduler', type=str, default='linear', help='lr sched
 parser.add_argument('--tmp_data_dir', type=str, default='augments', help='temp data dir')
 parser.add_argument('--note', type=str, default='try', help='note for this run')
 parser.add_argument('--wolrd_size', type=int, default=-1)
+parser.add_argument('--resume', default='', type=str, metavar='PATH', help='path to latest checkpoint (default: none)')
+parser.add_argument('--start-epoch', default=0, type=int, metavar='N', help='manual epoch number (useful on restarts)')
 
 args, unparsed = parser.parse_known_args()
 jobid = os.environ["SLURM_JOBID"]
@@ -182,6 +184,26 @@ def worker(gpu, ngpus_per_node, config_in):
         momentum=args.momentum,
         weight_decay=args.weight_decay
     )
+    if args.resume:
+        if os.path.isfile(args.resume):
+            logger.info("=> loading checkpoint '{}'".format(args.resume))
+            if args.gpu is None:
+                checkpoint = torch.load(args.resume)
+            else:
+                # Map model to be loaded to specified single gpu.
+                loc = 'cuda:{}'.format(args.gpu)
+                checkpoint = torch.load(args.resume, map_location=loc)
+            args.start_epoch = checkpoint['epoch']
+            best_acc1 = checkpoint['best_acc_top1']
+            if args.gpu is not None:
+                # best_acc1 may be from a checkpoint from a different GPU
+                best_acc1.to(args.gpu)
+            model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            logger.info("=> loaded checkpoint '{}' (epoch {})"
+                  .format(args.resume, checkpoint['epoch']))
+        else:
+            logger.info("=> no checkpoint found at '{}'".format(args.resume))
     data_dir = os.path.join(args.tmp_data_dir, 'imagenet')
     traindir = os.path.join(data_dir, 'train')
     validdir = os.path.join(data_dir, 'valid')
@@ -225,7 +247,7 @@ def worker(gpu, ngpus_per_node, config_in):
     best_acc_top1 = 0
     best_acc_top5 = 0
     lr = args.learning_rate
-    for epoch in range(args.epochs):
+    for epoch in range(args.start_epoch, args.epochs):
         valid_sampler.set_epoch(epoch)
         train_sampler.set_epoch(epoch)
         if args.lr_scheduler == 'cosine':
