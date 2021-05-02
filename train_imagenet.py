@@ -58,7 +58,7 @@ parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoot
 parser.add_argument('--lr_scheduler', type=str, default='linear', help='lr scheduler, linear or cosine')
 parser.add_argument('--tmp_data_dir', type=str, default='augments', help='temp data dir')
 parser.add_argument('--note', type=str, default='try', help='note for this run')
-parser.add_argument('--wolrd_size', type=int, default=-1)
+parser.add_argument('--world_size', type=int, default=-1)
 parser.add_argument('--resume', default='', type=str, metavar='PATH', help='path to latest checkpoint (default: none)')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N', help='manual epoch number (useful on restarts)')
 
