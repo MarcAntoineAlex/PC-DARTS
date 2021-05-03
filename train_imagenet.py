@@ -47,7 +47,7 @@ parser.add_argument('--report_freq', type=float, default=100, help='report frequ
 parser.add_argument('--epochs', type=int, default=250, help='num of training epochs')
 parser.add_argument('--init_channels', type=int, default=48, help='num of init channels')
 parser.add_argument('--layers', type=int, default=14, help='total number of layers')
-parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
+parser.add_argument('--auxiliary', action='store_true', default=True, help='use auxiliary tower')
 parser.add_argument('--auxiliary_weight', type=float, default=0.4, help='weight for auxiliary loss')
 parser.add_argument('--drop_path_prob', type=float, default=0, help='drop path probability')
 parser.add_argument('--save', type=str, default='augments', help='experiment name')
@@ -198,7 +198,7 @@ def worker(gpu, ngpus_per_node, config_in):
             if args.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
                 best_acc1.to(args.gpu)
-            model.load_state_dict(checkpoint['state_dict'])
+            model.module.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             logger.info("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
@@ -282,12 +282,13 @@ def worker(gpu, ngpus_per_node, config_in):
         if valid_acc_top1 > best_acc_top1:
             best_acc_top1 = valid_acc_top1
             is_best = True
-        utils.save_checkpoint({
-            'epoch': epoch + 1,
-            'state_dict': model.state_dict(),
-            'best_acc_top1': best_acc_top1,
-            'optimizer': optimizer.state_dict(),
-        }, is_best, args.save)
+        if args.rank == 0:
+            utils.save_checkpoint({
+                'epoch': epoch + 1,
+                'state_dict': model.module.state_dict(),
+                'best_acc_top1': best_acc_top1,
+                'optimizer': optimizer.state_dict(),
+            }, is_best, args.save)
     # get data with meta info
 
         
