@@ -44,7 +44,7 @@ parser.add_argument('--arch_learning_rate', type=float, default=6e-4, help='lear
 parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
 args = parser.parse_args()
 
-args.save = 'searchs/{}'.format(args.save, os.environ["SLURM_JOBID"])
+args.save = 'searchs/{}'.format(os.environ["SLURM_JOBID"])
 utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 
 log_format = '%(asctime)s %(message)s'
