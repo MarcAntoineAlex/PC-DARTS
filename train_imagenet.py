@@ -187,7 +187,7 @@ def worker(gpu, ngpus_per_node, config_in):
     best_acc_top1 = 0
     best_acc_top5 = 0
 
-    if args.resume and args.rank == 0:
+    if args.resume:
         if os.path.isfile(args.resume):
             logger.info("=> loading checkpoint '{}'".format(args.resume))
             if args.gpu is None:
@@ -198,8 +198,6 @@ def worker(gpu, ngpus_per_node, config_in):
                 checkpoint = torch.load(args.resume, map_location=loc)
             args.start_epoch = checkpoint['epoch']
             best_acc_top1 = checkpoint['best_acc_top1']
-            for n, (k1, k2) in enumerate(zip(checkpoint['state_dict'].keys(), model.state_dict().keys())):
-                logger.info("{}: {} {}".format(n, k1, k2))
             model.module.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             logger.info("=> loaded checkpoint '{}' (epoch {})"
