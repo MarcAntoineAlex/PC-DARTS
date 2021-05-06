@@ -187,7 +187,7 @@ def worker(gpu, ngpus_per_node, config_in):
     best_acc_top1 = 0
     best_acc_top5 = 0
 
-    if args.resume:
+    if args.resume and args.rank == 0:
         if os.path.isfile(args.resume):
             logger.info("=> loading checkpoint '{}'".format(args.resume))
             if args.gpu is None:
