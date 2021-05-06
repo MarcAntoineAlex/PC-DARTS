@@ -198,6 +198,7 @@ def worker(gpu, ngpus_per_node, config_in):
                 checkpoint = torch.load(args.resume, map_location=loc)
             args.start_epoch = checkpoint['epoch']
             best_acc_top1 = checkpoint['best_acc_top1']
+            logger.info("{} \n\n\n {}".format(checkpoint['state_dict'].keys(), model.state_dict().keys()))
             model.module.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             logger.info("=> loaded checkpoint '{}' (epoch {})"
