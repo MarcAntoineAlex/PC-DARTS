@@ -16,7 +16,7 @@ eval "$(conda shell.bash hook)"
 source /home/LAB/anaconda3/bin/activate base
 # conda --version
 # which python
-conda activate cpy
+conda activate gch
 cd ..
 echo Python:
 which python
@@ -26,4 +26,4 @@ export NCCL_IB_DISABLE=1
 export MKL_THREADING_LAYER=GNU
 export CUDA_HOME=/usr/local/cuda-10.2
 # sugon does not support infiniband
-srun python ./train_search.py
+srun python train.py --auxiliary --cutout --set "cifar10"
